@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>記憶閃圖</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0d0d1a;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .screen.active { opacity: 1; pointer-events: all; }
+
+    /* ── START ── */
+    #start-screen h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 1rem;
+      color: #9ca3af;
+      text-align: center;
+      line-height: 2;
+      max-width: 440px;
+    }
+    .subtitle kbd {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 6px;
+      padding: 2px 10px;
+      font-family: inherit;
+    }
+    .diff-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    .diff-grid {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .diff-btn {
+      width: 88px; height: 88px;
+      border: 2px solid rgba(167,139,250,0.3);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.04);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .diff-btn:hover {
+      background: rgba(124,58,237,0.2);
+      border-color: #a78bfa;
+      transform: translateY(-4px);
+      box-shadow: 0 8px 28px rgba(124,58,237,0.35);
+    }
+    .diff-btn:active { transform: none; }
+    .diff-btn .dnum {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+    }
+    .diff-btn .dlabel {
+      font-size: 0.7rem;
+      color: #9ca3af;
+      letter-spacing: 1px;
+    }
+    .diff-note {
+      font-size: 0.78rem;
+      color: #4b5563;
+      letter-spacing: 0.5px;
+    }
+    .btn {
+      padding: 14px 48px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(124,58,237,0.55); }
+    .btn:active { transform: none; }
+
+    /* ── HUD ── */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 28px;
+      background: rgba(13,13,26,0.88);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 100;
+    }
+    .hud-chip {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 6px 20px;
+      font-size: 0.9rem;
+    }
+    .hud-chip b { color: #a78bfa; font-size: 1.05rem; }
+    #hud-lives { display: flex; gap: 4px; font-size: 1.4rem; }
+
+    /* ── MEMORIZE ── */
+    #memorize-screen .phase-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    #memorize-screen .level-badge {
+      font-size: 0.95rem;
+      color: #a78bfa;
+      letter-spacing: 1px;
+    }
+    /* Target grid */
+    .target-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+    }
+    .mem-card {
+      width: 115px; height: 115px;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(167,139,250,0.35);
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4.5rem;
+      animation: cardGlow 2s ease-in-out infinite;
+    }
+    @keyframes cardGlow {
+      0%,100% { box-shadow: 0 0 25px rgba(167,139,250,0.1); }
+      50%      { box-shadow: 0 0 55px rgba(167,139,250,0.3), 0 0 90px rgba(124,58,237,0.12); }
+    }
+    /* Stagger glow per card */
+    .mem-card:nth-child(2) { animation-delay: 0.3s; }
+    .mem-card:nth-child(3) { animation-delay: 0.6s; }
+    .mem-card:nth-child(4) { animation-delay: 0.9s; }
+    .mem-card:nth-child(5) { animation-delay: 1.2s; }
+    .mem-card:nth-child(6) { animation-delay: 1.5s; }
+
+    .mem-btn-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .ready-btn {
+      padding: 13px 44px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+      animation: readyPulse 2s ease-in-out infinite;
+    }
+    .ready-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(124,58,237,0.55); }
+    .ready-btn:active { transform: none; animation: none; }
+    @keyframes readyPulse {
+      0%,100% { box-shadow: 0 4px 24px rgba(124,58,237,0.45); }
+      50%      { box-shadow: 0 4px 40px rgba(124,58,237,0.75); }
+    }
+    .ready-hint {
+      font-size: 0.78rem;
+      color: #4b5563;
+      letter-spacing: 1px;
+    }
+
+    /* ── FIND SCREEN ── */
+    #find-screen .find-label {
+      position: fixed;
+      top: 75px;
+      font-size: 0.82rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #4b5563;
+    }
+
+    /* Hit zone */
+    #hit-zone {
+      position: fixed;
+      top: 0; bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 170px;
+      background: rgba(124,58,237,0.04);
+      border-left:  1px solid rgba(167,139,250,0.18);
+      border-right: 1px solid rgba(167,139,250,0.18);
+      pointer-events: none;
+      z-index: 1;
+    }
+    #hit-zone::before, #hit-zone::after {
+      content: '▼';
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      color: rgba(167,139,250,0.35);
+    }
+    #hit-zone::before { top: 60px; }
+    #hit-zone::after  { content: '▲'; bottom: 60px; }
+
+    /* Marquee */
+    #marquee-wrap {
+      position: fixed;
+      top: 50%;
+      left: 0; right: 0;
+      transform: translateY(-50%);
+      overflow: hidden;
+      height: 175px;
+      z-index: 2;
+    }
+    #marquee-track {
+      position: absolute;
+      top: 0;
+      display: flex;
+      gap: 28px;
+      will-change: transform;
+    }
+    .card {
+      width: 145px; height: 145px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5.2rem;
+      flex-shrink: 0;
+      transition: background 0.08s, border-color 0.08s, box-shadow 0.08s;
+    }
+    .card.in-zone {
+      background: rgba(124,58,237,0.18);
+      border-color: rgba(167,139,250,0.55);
+      box-shadow: 0 0 35px rgba(124,58,237,0.25);
+    }
+    .card.found {
+      background: rgba(74,222,128,0.2) !important;
+      border-color: rgba(74,222,128,0.7) !important;
+      box-shadow: 0 0 35px rgba(74,222,128,0.35) !important;
+    }
+
+    /* Target reminder slots */
+    #target-reminder {
+      position: fixed;
+      bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    #target-reminder .rlabel {
+      font-size: 0.72rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    .reminder-slots {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 420px;
+    }
+    .rslot {
+      width: 58px; height: 58px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      transition: all 0.3s ease;
+      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(37,99,235,0.15));
+      border: 1px solid rgba(167,139,250,0.25);
+      color: rgba(167,139,250,0.5);
+    }
+    .rslot.done {
+      background: rgba(74,222,128,0.12);
+      border-color: rgba(74,222,128,0.45);
+      color: #4ade80;
+      font-size: 1.4rem;
+    }
+
+    /* Key hint */
+    #key-hint {
+      position: fixed;
+      bottom: 24px;
+      right: 28px;
+      display: flex;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: #374151;
+    }
+    #key-hint kbd {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-family: inherit;
+    }
+
+    /* ── OVERLAYS ── */
+    #feedback {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 800;
+      pointer-events: none;
+      z-index: 300;
+      opacity: 0;
+    }
+    #feedback.show { animation: feedAnim 1s ease-out forwards; }
+    @keyframes feedAnim {
+      0%  { opacity: 1; transform: scale(0.75); }
+      20% { opacity: 1; transform: scale(1.1); }
+      100%{ opacity: 0; transform: scale(1) translateY(-50px); }
+    }
+    #feedback.good { color: #4ade80; text-shadow: 0 0 30px rgba(74,222,128,0.5); }
+    #feedback.bad  { color: #f87171; text-shadow: 0 0 30px rgba(248,113,113,0.5); }
+
+    #flash {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 250; opacity: 0;
+    }
+    #flash.green { animation: flashAnim 0.4s ease-out; background: rgba(74,222,128,0.1); }
+    #flash.red   { animation: flashAnim 0.4s ease-out; background: rgba(248,113,113,0.09); }
+    @keyframes flashAnim { 0% { opacity:1; } 100% { opacity:0; } }
+
+    #levelup {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      font-weight: 800;
+      color: #fbbf24;
+      text-shadow: 0 0 40px rgba(251,191,36,0.6);
+      pointer-events: none; z-index: 300; opacity: 0;
+    }
+    #levelup.show { animation: lvlAnim 1.3s ease-out forwards; }
+    @keyframes lvlAnim {
+      0%  { opacity: 0; transform: scale(0.7); }
+      25% { opacity: 1; transform: scale(1.15); }
+      65% { opacity: 1; transform: scale(1); }
+      100%{ opacity: 0; transform: translateY(-40px); }
+    }
+
+    /* ── GAME OVER ── */
+    #gameover-screen h2 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      color: #f87171;
+      letter-spacing: 2px;
+    }
+    .big-score {
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .go-sub { font-size: 1.05rem; color: #6b7280; }
+  </style>
+</head>
+<body>
+
+<!-- ── START ── -->
+<div id="start-screen" class="screen active">
+  <h1>🧠 記憶閃圖</h1>
+  <p class="subtitle">
+    記住圖片，在跑馬燈中央看到時<br>
+    按下 <kbd>Space</kbd> 或 <kbd>Enter</kbd> 捕捉
+  </p>
+  <div class="diff-label">選擇起始張數</div>
+  <div class="diff-grid">
+    <button class="diff-btn" data-n="4"><span class="dnum">4</span><span class="dlabel">入門</span></button>
+    <button class="diff-btn" data-n="5"><span class="dnum">5</span><span class="dlabel">普通</span></button>
+    <button class="diff-btn" data-n="6"><span class="dnum">6</span><span class="dlabel">進階</span></button>
+    <button class="diff-btn" data-n="7"><span class="dnum">7</span><span class="dlabel">高手</span></button>
+    <button class="diff-btn" data-n="8"><span class="dnum">8</span><span class="dlabel">挑戰</span></button>
+  </div>
+  <div class="diff-note">每三關自動增加一張目標圖</div>
+</div>
+
+<!-- ── MEMORIZE ── -->
+<div id="memorize-screen" class="screen">
+  <div class="phase-label">記住這些圖！</div>
+  <div class="level-badge" id="mem-level">第 1 關</div>
+  <div class="target-grid" id="target-grid"></div>
+  <div class="mem-btn-row">
+    <button class="ready-btn" id="ready-btn">準備好了！</button>
+    <div class="ready-hint">或按 Space / Enter / 點擊畫面</div>
+  </div>
+</div>
+
+<!-- ── FIND ── -->
+<div id="find-screen" class="screen">
+  <div class="find-label">看到目標出現在中央時按下按鍵！</div>
+  <div id="hit-zone"></div>
+  <div id="marquee-wrap">
+    <div id="marquee-track"></div>
+  </div>
+  <div id="target-reminder">
+    <div class="rlabel">目標</div>
+    <div class="reminder-slots" id="reminder-slots"></div>
+  </div>
+  <div id="key-hint"><kbd>Space</kbd><kbd>Enter</kbd><span style="color:#4b5563">/ 點擊</span></div>
+</div>
+
+<!-- ── GAME OVER ── -->
+<div id="gameover-screen" class="screen">
+  <h2>遊戲結束</h2>
+  <div class="big-score" id="go-score">0</div>
+  <div class="go-sub" id="go-level">通過 0 關</div>
+  <button class="btn" id="restart-btn" style="margin-top:1.2rem">再玩一次</button>
+</div>
+
+<!-- ── HUD ── -->
+<div id="hud">
+  <div class="hud-chip">關卡 <b id="hud-level">1</b></div>
+  <div class="hud-chip">得分 <b id="hud-score">0</b></div>
+  <div id="hud-lives"></div>
+</div>
+
+<!-- ── OVERLAYS ── -->
+<div id="feedback"></div>
+<div id="flash"></div>
+<div id="levelup"></div>
+
+<script>
+'use strict';
+
+// ── EMOJI POOLS (food / animals / household) ──────────────────────────────────
+const FOOD = [
+  '🍎','🍌','🍇','🍓','🍑','🥝','🍍','🥭','🍒','🍋','🍊','🍉','🥥','🫐',
+  '🍔','🍕','🌮','🍜','🍣','🍩','🎂','🍦','🍪','🧁','🍿','🍱','🥗','🥐',
+  '🧆','🥪','🥞','🌯','🥘','🥚','🍲','🫕',
+];
+const ANIMALS = [
+  '🐶','🐱','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵',
+  '🐧','🦆','🦅','🦉','🐺','🐴','🦄','🦋','🐢','🐍','🐠','🐙','🦀',
+  '🐝','🐌','🐞','🦜','🦩','🦚','🦢','🐬','🦭','🐘','🦒','🐆','🦓','🦔',
+];
+const HOUSEHOLD = [
+  '⏰','💡','🔦','🔑','✂️','📱','💻','📺','📷','🎒','👜','🧳',
+  '☂️','🧹','🧺','🪑','🛋️','🚪','🪞','🧸','🎮','📚','✏️','📌',
+  '🪣','🧼','🪥','🔭','🔬','🧪','🪜','🔧','🪛','🧲','🩺','🎒',
+];
+const POOL = [...FOOD, ...ANIMALS, ...HOUSEHOLD];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let state = {};
+
+function resetState(baseTargets) {
+  state = {
+    level:        1,
+    score:        0,
+    lives:        3,
+    baseTargets,
+    targets:      [],
+    targetSet:    new Set(),
+    targetsHit:   new Set(),
+    phase:        'idle',
+    animId:       null,
+    resolved:     false,
+  };
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+function numTargets(lvl) {
+  // Every 3 levels, +1 target from the chosen base
+  return state.baseTargets + Math.floor((lvl - 1) / 3);
+}
+
+function cfg(lvl) {
+  const nt          = numTargets(lvl);
+  const distractors = Math.min(8 + (lvl - 1) * 2, 22);
+  return {
+    nt,
+    totalImages: nt + distractors,
+    speed:       Math.min(115 + (lvl - 1) * 18, 380),
+    gridWidth:   n => n <= 4 ? (2*115 + 14) : (3*115 + 2*14),
+  };
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const sh = a  => [...a].sort(() => Math.random() - 0.5);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function updateHUD() {
+  $('hud-level').textContent = state.level;
+  $('hud-score').textContent = state.score;
+  const el = $('hud-lives');
+  el.textContent = '';
+  for (let i = 0; i < 3; i++) {
+    const s = document.createElement('span');
+    s.textContent = i < state.lives ? '❤️' : '🖤';
+    el.appendChild(s);
+  }
+}
+
+// ── VISUAL FEEDBACK ───────────────────────────────────────────────────────────
+function showFeedback(msg, good) {
+  const el = $('feedback');
+  el.textContent = msg;
+  el.className = '';
+  void el.offsetWidth;
+  el.className = `show ${good ? 'good' : 'bad'}`;
+}
+function doFlash(color) {
+  const el = $('flash');
+  el.className = '';
+  void el.offsetWidth;
+  el.className = color;
+}
+function showLevelUp(newLvl) {
+  const newNt  = state.baseTargets + Math.floor((newLvl - 1) / 3);
+  const prevNt = state.baseTargets + Math.floor((newLvl - 2) / 3);
+  const el = $('levelup');
+  el.textContent = newNt > prevNt ? `🆙 升級！目標 ${newNt} 張` : `🎉 第 ${newLvl} 關！`;
+  el.className = '';
+  void el.offsetWidth;
+  el.className = 'show';
+}
+
+// ── GAME FLOW ─────────────────────────────────────────────────────────────────
+function startGame(baseTargets) {
+  resetState(baseTargets);
+  $('hud').style.display = 'flex';
+  updateHUD();
+  beginLevel();
+}
+
+function pickTargets(n) {
+  // Always include at least one from each category
+  const mandatory = [sh(FOOD)[0], sh(ANIMALS)[0], sh(HOUSEHOLD)[0]];
+  if (n <= 3) return sh(mandatory).slice(0, n);
+  const extra = sh(POOL.filter(e => !mandatory.includes(e))).slice(0, n - 3);
+  return sh([...mandatory, ...extra]);
+}
+
+function buildMemGrid() {
+  const c  = cfg(state.level);
+  const nt = state.targets.length;
+  const grid = $('target-grid');
+  grid.innerHTML = '';
+  grid.style.maxWidth = c.gridWidth(nt) + 'px';
+  state.targets.forEach(emoji => {
+    const div = document.createElement('div');
+    div.className   = 'mem-card';
+    div.textContent = emoji;
+    grid.appendChild(div);
+  });
+  $('mem-level').textContent = `第 ${state.level} 關　目標 ${nt} 張`;
+}
+
+function retryLevel() {
+  state.targetsHit = new Set();
+  state.resolved   = false;
+  state.phase      = 'memorize';
+  if (state.animId) { cancelAnimationFrame(state.animId); state.animId = null; }
+  buildMemGrid();
+  showScreen('memorize-screen');
+}
+
+function beginLevel() {
+  state.phase    = 'memorize';
+  state.resolved = false;
+  if (state.animId) { cancelAnimationFrame(state.animId); state.animId = null; }
+
+  const c  = cfg(state.level);
+  const nt = c.nt;
+
+  // Pick targets — guarantee at least one from each category
+  state.targets    = pickTargets(nt);
+  state.targetSet  = new Set(state.targets);
+  state.targetsHit = new Set();
+
+  buildMemGrid();
+  showScreen('memorize-screen');
+}
+
+function beginFind() {
+  if (state.phase !== 'memorize') return;
+  state.phase    = 'find';
+  state.resolved = false;
+
+  const c       = cfg(state.level);
+  const targets = state.targets;
+
+  // Build sequence: all targets + distractors, shuffled
+  const distractorPool = sh(POOL.filter(e => !state.targetSet.has(e)));
+  const distractors    = distractorPool.slice(0, c.totalImages - targets.length);
+  let sequence         = sh([...targets, ...distractors]);
+
+  // Ensure first item is not a target
+  if (state.targetSet.has(sequence[0])) {
+    const idx = sequence.findIndex(e => !state.targetSet.has(e));
+    if (idx > 0) { [sequence[0], sequence[idx]] = [sequence[idx], sequence[0]]; }
+  }
+
+  // Build marquee DOM
+  const track = $('marquee-track');
+  track.innerHTML = '';
+  const ITEM_W = 145 + 28;  // card + gap
+
+  sequence.forEach(emoji => {
+    const div = document.createElement('div');
+    div.className     = 'card';
+    div.dataset.emoji = emoji;
+    div.textContent   = emoji;
+    track.appendChild(div);
+  });
+
+  // Build reminder slots (all covered with ？)
+  const slots = $('reminder-slots');
+  slots.innerHTML = '';
+  targets.forEach((_, i) => {
+    const div = document.createElement('div');
+    div.className = 'rslot';
+    div.id        = `rslot-${i}`;
+    div.textContent = '？';
+    slots.appendChild(div);
+  });
+
+  const startX   = window.innerWidth + 40;
+  track.style.transform = `translateX(${startX}px)`;
+  showScreen('find-screen');
+
+  const totalDist = startX + sequence.length * ITEM_W + 300;
+  const duration  = (totalDist / c.speed) * 1000;
+  const CENTER_X  = window.innerWidth / 2;
+  const HIT_HALF  = 88;
+  let t0 = null;
+
+  function frame(ts) {
+    if (!t0) t0 = ts;
+    const elapsed = ts - t0;
+    const x = startX - (elapsed / duration) * totalDist;
+    track.style.transform = `translateX(${x}px)`;
+
+    track.querySelectorAll('.card').forEach(card => {
+      const rect = card.getBoundingClientRect();
+      const cx   = rect.left + rect.width / 2;
+      card.classList.toggle('in-zone', Math.abs(cx - CENTER_X) < HIT_HALF);
+    });
+
+    if (elapsed < duration) {
+      state.animId = requestAnimationFrame(frame);
+    } else {
+      if (!state.resolved) onMiss();
+    }
+  }
+
+  state.animId = requestAnimationFrame(frame);
+}
+
+// ── HIT DETECTION (shared by keyboard & touch) ───────────────────────────────
+function tryHit() {
+  if (state.phase !== 'find') return;
+  if (state.resolved) return;
+
+  const CENTER_X = window.innerWidth / 2;
+  const HIT_HALF = 90;
+  const track    = $('marquee-track');
+  let best = null, bestDist = Infinity;
+
+  track.querySelectorAll('.card').forEach(card => {
+    const rect = card.getBoundingClientRect();
+    const cx   = rect.left + rect.width / 2;
+    const d    = Math.abs(cx - CENTER_X);
+    if (d < HIT_HALF && d < bestDist) { bestDist = d; best = card; }
+  });
+
+  if (!best) return;
+
+  const emoji = best.dataset.emoji;
+  if (state.targetSet.has(emoji) && !state.targetsHit.has(emoji)) {
+    onTargetHit(best, emoji);
+  } else if (!state.targetSet.has(emoji)) {
+    onWrong();
+  }
+}
+
+function onKey(e) {
+  if (e.key !== ' ' && e.key !== 'Enter') return;
+  e.preventDefault();
+  if (state.phase === 'memorize') { beginFind(); return; }
+  tryHit();
+}
+
+function onTouch(e) {
+  if (e.target.closest('button')) return;  // let buttons handle themselves
+  e.preventDefault();
+  if (state.phase === 'memorize') { beginFind(); return; }
+  tryHit();
+}
+
+// ── OUTCOMES ──────────────────────────────────────────────────────────────────
+function stopAnim() {
+  if (state.animId) { cancelAnimationFrame(state.animId); state.animId = null; }
+}
+
+function onTargetHit(card, emoji) {
+  state.targetsHit.add(emoji);
+
+  // Flash the card in marquee
+  card.classList.add('found');
+  setTimeout(() => card.classList.remove('found'), 600);
+
+  // Check off the reminder slot
+  const idx  = state.targets.indexOf(emoji);
+  const slot = $(`rslot-${idx}`);
+  if (slot) { slot.textContent = '✓'; slot.classList.add('done'); }
+
+  const bonus = Math.max(50, 150 - (state.level - 1) * 5);
+  state.score += bonus;
+  updateHUD();
+
+  if (state.targetsHit.size === state.targets.length) {
+    onAllFound();
+  }
+}
+
+function onAllFound() {
+  state.resolved = true;
+  stopAnim();
+  state.phase = 'idle';
+  doFlash('green');
+
+  setTimeout(() => {
+    showLevelUp(state.level + 1);
+    state.level++;
+    updateHUD();
+    setTimeout(beginLevel, 1200);
+  }, 800);
+}
+
+function onWrong() {
+  state.resolved = true;
+  stopAnim();
+  state.phase = 'idle';
+  state.lives--;
+  updateHUD();
+  doFlash('red');
+
+  setTimeout(() => {
+    if (state.lives <= 0) endGame();
+    else retryLevel();
+  }, 950);
+}
+
+function onMiss() {
+  state.resolved = true;
+  state.phase = 'idle';
+  state.lives--;
+  updateHUD();
+  doFlash('red');
+
+  setTimeout(() => {
+    if (state.lives <= 0) endGame();
+    else retryLevel();
+  }, 950);
+}
+
+function endGame() {
+  stopAnim();
+  $('hud').style.display = 'none';
+  $('go-score').textContent = state.score;
+  $('go-level').textContent = `通過 ${Math.max(0, state.level - 1)} 關`;
+  showScreen('gameover-screen');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => startGame(+btn.dataset.n));
+});
+$('restart-btn').addEventListener('click', () => showScreen('start-screen'));
+$('ready-btn').addEventListener('click', beginFind);
+document.addEventListener('keydown', onKey);
+document.addEventListener('touchstart', onTouch, { passive: false });
+</script>
+</body>
+</html>
