@@ -437,12 +437,12 @@
 
 <!-- ── MEMORIZE ── -->
 <div id="memorize-screen" class="screen">
-  <div class="phase-label">記住這些圖！</div>
+  <div class="phase-label" id="phase-label">記住這些圖！</div>
   <div class="level-badge" id="mem-level">第 1 關</div>
   <div class="target-grid" id="target-grid"></div>
   <div class="mem-btn-row">
     <button class="ready-btn" id="ready-btn">準備好了！</button>
-    <div class="ready-hint">或按 Space / Enter / 點擊畫面</div>
+    <div class="ready-hint" id="ready-hint">或按 Space / Enter / 點擊畫面</div>
   </div>
 </div>
 
@@ -743,13 +743,15 @@ function tryHit() {
 function onKey(e) {
   if (e.key !== ' ' && e.key !== 'Enter') return;
   e.preventDefault();
+  if (state.phase === 'answer') return;
   if (state.phase === 'memorize') { beginFind(); return; }
   tryHit();
 }
 
 function onTouch(e) {
-  if (e.target.closest('button')) return;  // let buttons handle themselves
+  if (e.target.closest('button')) return;
   e.preventDefault();
+  if (state.phase === 'answer') return;   // locked during answer reveal
   if (state.phase === 'memorize') { beginFind(); return; }
   tryHit();
 }
@@ -817,8 +819,30 @@ function onMiss() {
 
   setTimeout(() => {
     if (state.lives <= 0) endGame();
-    else retryLevel();
+    else showAnswers();
   }, 950);
+}
+
+function showAnswers() {
+  // Show memorize screen with targets visible, label "正確答案"
+  state.targetsHit = new Set();
+  state.resolved   = false;
+  state.phase      = 'answer';
+  if (state.animId) { cancelAnimationFrame(state.animId); state.animId = null; }
+
+  buildMemGrid();
+  $('phase-label').textContent   = '正確答案';
+  $('ready-btn').style.display   = 'none';
+  $('ready-hint').style.display  = 'none';
+  showScreen('memorize-screen');
+
+  // After 2.5s, switch to retry mode
+  setTimeout(() => {
+    $('phase-label').textContent  = '記住這些圖！';
+    $('ready-btn').style.display  = '';
+    $('ready-hint').style.display = '';
+    state.phase = 'memorize';
+  }, 2500);
 }
 
 function endGame() {
